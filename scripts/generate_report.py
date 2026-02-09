@@ -2,7 +2,7 @@
 
 import sys
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Optional
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -42,7 +42,7 @@ def fetch_data_from_mongodb(db, species_filter: Optional[str] = None,
     species_df = pd.DataFrame(species_docs)
 
     if species_df.empty:
-        print("✗ No species data found")
+        print("No species data found")
         return pd.DataFrame()
 
     # Apply fuzzy filter if provided
@@ -55,7 +55,7 @@ def fetch_data_from_mongodb(db, species_filter: Optional[str] = None,
             threshold=70
         )
         species_df = species_df[species_df['species_name'].isin(filtered_names)]
-        print(f"✓ Filtered to {len(species_df)} species")
+        print(f"Filtered to {len(species_df)} species")
 
     # Fetch classifications with minimum confidence
     classification_docs = list(classifications_coll.find({
@@ -64,7 +64,7 @@ def fetch_data_from_mongodb(db, species_filter: Optional[str] = None,
     classifications_df = pd.DataFrame(classification_docs)
 
     if classifications_df.empty:
-        print("✗ No classifications found")
+        print("No classifications found")
         return pd.DataFrame()
 
     # Clean classifications
@@ -243,10 +243,10 @@ def generate_report():
     df = fetch_data_from_mongodb(db, species_filter, min_confidence)
 
     if df.empty:
-        print("✗ No data to generate report")
+        print("No data to generate report")
         return
 
-    print(f"✓ Fetched {len(df)} classification records")
+    print(f"Fetched {len(df)} classification records")
 
     # Clean data
     print("Cleaning data...")
@@ -257,10 +257,10 @@ def generate_report():
     stats_df = aggregate_statistics(df)
 
     if stats_df.empty:
-        print("✗ No statistics to generate")
+        print("No statistics to generate")
         return
 
-    print(f"✓ Generated statistics for {len(stats_df)} species")
+    print(f"Generated statistics for {len(stats_df)} species")
 
     # Ensure output directory exists
     output_path = Path(output_file)
@@ -268,7 +268,7 @@ def generate_report():
 
     # Save to CSV
     stats_df.to_csv(output_file, index=False)
-    print(f"✓ Report saved to: {output_file}")
+    print(f"Report saved to: {output_file}")
 
     # Print summary
     print("\n" + "=" * 60)
@@ -284,7 +284,7 @@ def generate_report():
     print("\nTop 10 species by classification count:")
     print(stats_df[['species_name', 'classification_count', 'avg_confidence']].head(10).to_string(index=False))
 
-    print("\n✓ Pipeline completed successfully!")
+    print("\nPipeline completed successfully!")
 
 
 if __name__ == '__main__':

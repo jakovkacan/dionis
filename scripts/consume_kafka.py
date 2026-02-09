@@ -80,26 +80,26 @@ def consume_and_store_observations():
 
                 if result.inserted_id:
                     stored_count += 1
-                    print(f"✓ Stored observation {stored_count}: "
+                    print(f"Stored observation {stored_count}: "
                           f"Species {observation.taxonomy_id} at "
                           f"({observation.latitude:.4f}, {observation.longitude:.4f})")
 
             except Exception as e:
-                print(f"✗ Error processing message {message_count}: {e}")
+                print(f"Error processing message {message_count}: {e}")
                 continue
 
     except Exception as e:
-        print(f"✗ Error consuming from Kafka: {e}")
+        print(f"Error consuming from Kafka: {e}")
 
     finally:
         consumer.close()
-        print(f"\n✓ Consumed {message_count} messages")
-        print(f"✓ Stored {stored_count} observations in MongoDB")
+        print(f"\nConsumed {message_count} messages")
+        print(f"Stored {stored_count} observations in MongoDB")
 
         # Create checkpoint file
         Path('checkpoints').mkdir(exist_ok=True)
         Path('checkpoints/kafka_consumed.flag').touch()
-        print("✓ Checkpoint created: kafka_consumed.flag")
+        print("Checkpoint created: kafka_consumed.flag")
 
 
 if __name__ == '__main__':

@@ -41,8 +41,8 @@ def get_kafka_consumer() -> KafkaConsumer:
         consumer_timeout_ms=10000  # 10 seconds timeout
     )
 
-    print(f"✓ Connected to Kafka at {bootstrap_servers}")
-    print(f"✓ Subscribed to topic: {topic}")
+    print(f"Connected to Kafka at {bootstrap_servers}")
+    print(f"Subscribed to topic: {topic}")
 
     return consumer
 
@@ -67,6 +67,6 @@ def get_kafka_producer() -> KafkaProducer:
         value_serializer=lambda v: json.dumps(v).encode('utf-8')
     )
 
-    print(f"✓ Kafka producer connected at {bootstrap_servers}")
+    print(f"Kafka producer connected at {bootstrap_servers}")
 
     return producer

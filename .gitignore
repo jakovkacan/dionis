@@ -1,1 +1,7 @@
 ﻿/.idea/
+/.snakemake/
+/.venv/
+/audio_files/
+/logs/
+/output/
+/checkpoints/

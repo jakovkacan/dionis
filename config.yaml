@@ -33,6 +33,7 @@ scraping:
   url: https://aves.regoch.net
   timeout: 30
   retry_attempts: 3
+  use_selenium: true  # Set to true to use Selenium for JavaScript-rendered content
 
 # API settings
 classifier_api:

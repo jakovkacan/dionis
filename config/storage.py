@@ -34,7 +34,7 @@ def get_minio_client() -> Minio:
         secure=secure
     )
 
-    print(f"✓ Connected to MinIO at {endpoint}")
+    print(f"Connected to MinIO at {endpoint}")
 
     return client
 
@@ -53,11 +53,11 @@ def ensure_buckets(client: Minio):
         try:
             if not client.bucket_exists(bucket_name):
                 client.make_bucket(bucket_name)
-                print(f"✓ Created bucket: {bucket_name}")
+                print(f"Created bucket: {bucket_name}")
             else:
-                print(f"✓ Bucket exists: {bucket_name}")
+                print(f"Bucket exists: {bucket_name}")
         except S3Error as e:
-            print(f"✗ Error with bucket {bucket_name}: {e}")
+            print(f"Error with bucket {bucket_name}: {e}")
             raise
 
 
@@ -85,7 +85,7 @@ def upload_file(client: Minio, bucket_name: str, object_name: str,
         )
         return f"{bucket_name}/{object_name}"
     except S3Error as e:
-        print(f"✗ Error uploading file: {e}")
+        print(f"Error uploading file: {e}")
         raise
 
 
@@ -117,5 +117,5 @@ def upload_bytes(client: Minio, bucket_name: str, object_name: str,
         )
         return f"{bucket_name}/{object_name}"
     except S3Error as e:
-        print(f"✗ Error uploading data: {e}")
+        print(f"Error uploading data: {e}")
         raise

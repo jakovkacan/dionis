@@ -7,10 +7,13 @@ kafka-python==2.3.0
 beautifulsoup4==4.14.3
 requests==2.32.5
 lxml==6.0.2
+selenium==4.27.1  # For JavaScript-rendered content
+webdriver-manager==4.0.2  # Automatic ChromeDriver version management
 
 # Data processing
 pandas==3.0.0
 numpy==2.4.2
+pydantic==2.12.5
 
 # Fuzzy matching
 rapidfuzz==3.14.3
@@ -21,11 +24,6 @@ snakemake==9.16.3
 # Utilities
 python-dotenv==1.2.1
 pyyaml==6.0.3
-
-# Optional: Google Drive support
-google-api-python-client==2.189.0
-google-auth-httplib2==0.3.0
-google-auth-oauthlib==1.2.4
 
 # Visualization (optional)
 matplotlib==3.10.8

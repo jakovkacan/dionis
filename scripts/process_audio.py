@@ -1,7 +1,6 @@
 """Script to process audio files, upload to MinIO, and classify birds."""
 
 import sys
-import os
 import json
 import requests
 import hashlib
@@ -40,7 +39,7 @@ def get_audio_files(directory: str) -> List[Path]:
 
     directory_path = Path(directory)
     if not directory_path.exists():
-        print(f"✗ Directory not found: {directory}")
+        print(f"Directory not found: {directory}")
         return audio_files
 
     for file_path in directory_path.rglob('*'):
@@ -122,10 +121,10 @@ def classify_audio(api_endpoint: str, file_path: Path,
             return response.json()
 
     except requests.RequestException as e:
-        print(f"✗ API request failed: {e}")
+        print(f"API request failed: {e}")
         return None
     except Exception as e:
-        print(f"✗ Error classifying audio: {e}")
+        print(f"Error classifying audio: {e}")
         return None
 
 
@@ -238,10 +237,10 @@ def process_audio_files():
     audio_files = get_audio_files(source_dir)
 
     if not audio_files:
-        print(f"✗ No audio files found in {source_dir}")
+        print(f"No audio files found in {source_dir}")
         return
 
-    print(f"✓ Found {len(audio_files)} audio files")
+    print(f"Found {len(audio_files)} audio files")
 
     uploaded_count = 0
     classified_count = 0
@@ -280,8 +279,8 @@ def process_audio_files():
             audio_file_id = str(result.inserted_id)
             uploaded_count += 1
 
-            print(f"  ✓ Uploaded to: {minio_path}")
-            print(f"  ✓ Location: ({latitude:.4f}, {longitude:.4f})")
+            print(f"  Uploaded to: {minio_path}")
+            print(f"  Location: ({latitude:.4f}, {longitude:.4f})")
 
             # Classify audio
             print("  Calling classification API...")
@@ -292,7 +291,7 @@ def process_audio_files():
             )
 
             if not api_response:
-                print("  ✗ Classification failed")
+                print("  Classification failed")
                 continue
 
             # Store API log
@@ -304,7 +303,7 @@ def process_audio_files():
                 api_response
             )
 
-            print(f"  ✓ API log stored: {log_path}")
+            print(f"  API log stored: {log_path}")
 
             # Parse classification results
             detected_birds = api_response.get('detections', [])
@@ -338,20 +337,20 @@ def process_audio_files():
                 classification_collection.insert_one(classification.to_dict())
                 classified_count += 1
 
-                print(f"  ✓ Classified: {species_name} (confidence: {confidence:.2%})")
+                print(f"  Classified: {species_name} (confidence: {confidence:.2%})")
 
         except Exception as e:
-            print(f"  ✗ Error processing file: {e}")
+            print(f"  Error processing file: {e}")
             continue
 
     print("\n" + "=" * 60)
-    print(f"✓ Uploaded {uploaded_count} audio files")
-    print(f"✓ Created {classified_count} classification records")
+    print(f"Uploaded {uploaded_count} audio files")
+    print(f"Created {classified_count} classification records")
 
     # Create checkpoint file
     Path('checkpoints').mkdir(exist_ok=True)
     Path('checkpoints/audio_processed.flag').touch()
-    print("✓ Checkpoint created: audio_processed.flag")
+    print("Checkpoint created: audio_processed.flag")
 
 
 if __name__ == '__main__':

@@ -7,9 +7,9 @@ from pathlib import Path
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from config.database import get_database, get_collection, create_indexes
+from config.database import get_database, create_indexes
 from utils.scraper import BirdSpeciesScraper
-from models.species import Species
+from models.species import Species, SpeciesRepository
 
 
 def load_config():
@@ -28,24 +28,32 @@ def scrape_and_store_species():
 
     # Connect to MongoDB
     db = get_database()
-    species_collection = get_collection('species', db)
+    species_repo = SpeciesRepository(db)
 
     # Create indexes
     create_indexes(db)
 
     # Check if data already exists
-    existing_count = species_collection.count_documents({})
+    existing_count = species_repo.count()
     if existing_count > 0:
-        print(f"✓ Species data already exists ({existing_count} records)")
+        print(f"Species data already exists ({existing_count} records)")
         print("Skipping scraping step...")
         return
 
     # Initialize scraper
     scraping_config = config['scraping']
+    use_selenium = scraping_config.get('use_selenium', True)
+
+    # Allow command line override
+    if len(sys.argv) > 1 and sys.argv[1] == '--selenium':
+        use_selenium = True
+        print("Using Selenium for JavaScript-rendered content")
+
     scraper = BirdSpeciesScraper(
         base_url=scraping_config['url'],
         timeout=scraping_config['timeout'],
-        retry_attempts=scraping_config['retry_attempts']
+        retry_attempts=scraping_config['retry_attempts'],
+        use_selenium=use_selenium
     )
 
     print(f"Starting scraping from: {scraping_config['url']}")
@@ -55,49 +63,52 @@ def scrape_and_store_species():
         species_data_list = scraper.scrape_species_list()
 
         if not species_data_list:
-            print("✗ No species data scraped")
+            print("No species data scraped")
             return
 
-        print(f"✓ Scraped {len(species_data_list)} species")
+        print(f"Scraped {len(species_data_list)} species")
 
         # Store in MongoDB
         inserted_count = 0
+        updated_count = 0
         for species_data in species_data_list:
             try:
-                # Create Species object
+                # Create Species object from GBIF data
                 species = Species(
-                    taxonomy_id=species_data.get('taxonomy_id', ''),
-                    species_name=species_data.get('species_name', ''),
-                    common_name=species_data.get('common_name'),
-                    scientific_name=species_data.get('scientific_name'),
-                    family=species_data.get('family'),
+                    key=species_data.get('key'),
+                    scientificName=species_data.get('scientificName', ''),
+                    canonicalName=species_data.get('canonicalName'),
+                    rank=species_data.get('rank'),
+                    kingdom=species_data.get('kingdom'),
+                    phylum=species_data.get('phylum'),
+                    **{'class': species_data.get('class')},  # 'class' is a Python keyword
                     order=species_data.get('order'),
-                    additional_data=species_data.get('additional_data', {})
+                    family=species_data.get('family'),
+                    genus=species_data.get('genus')
                 )
 
-                # Insert into MongoDB (skip if taxonomy_id already exists)
-                result = species_collection.update_one(
-                    {'taxonomy_id': species.taxonomy_id},
-                    {'$setOnInsert': species.to_dict()},
-                    upsert=True
-                )
-
-                if result.upserted_id:
+                # Upsert species (insert or update)
+                result = species_repo.upsert_species(species)
+                if result:
+                    updated_count += 1
+                else:
                     inserted_count += 1
 
             except Exception as e:
-                print(f"✗ Error storing species {species_data.get('taxonomy_id')}: {e}")
+                print(f"Error storing species {species_data.get('key')}: {e}")
                 continue
 
-        print(f"✓ Inserted {inserted_count} new species into MongoDB")
+        print(f"Inserted {inserted_count} new species into MongoDB")
+        if updated_count > 0:
+            print(f"Updated {updated_count} existing species")
 
         # Create checkpoint file
         Path('checkpoints').mkdir(exist_ok=True)
         Path('checkpoints/species_scraped.flag').touch()
-        print("✓ Checkpoint created: species_scraped.flag")
+        print("Checkpoint created: species_scraped.flag")
 
     except Exception as e:
-        print(f"✗ Error during scraping: {e}")
+        print(f"Error during scraping: {e}")
         raise
 
 

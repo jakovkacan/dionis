@@ -33,7 +33,7 @@ def get_mongodb_client() -> MongoClient:
 
     # Test connection
     client.server_info()
-    print(f"✓ Connected to MongoDB at {host}:{port}")
+    print(f"Connected to MongoDB at {host}:{port}")
 
     return client
 
@@ -113,4 +113,4 @@ def create_indexes(db: Database):
     audio_coll.create_index('minio_path', unique=True)
     audio_coll.create_index('filename')
 
-    print("✓ Database indexes created")
+    print("Database indexes created")
