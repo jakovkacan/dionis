@@ -1,5 +1,3 @@
-"""Script to consume bird observations from Kafka and store in MongoDB."""
-
 import sys
 from pathlib import Path
 from typing import Dict, Any

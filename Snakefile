@@ -1,7 +1,4 @@
 """
-Snakemake workflow for Dionis bird sightings pipeline.
-
-Usage:
     snakemake --cores 1
     snakemake --cores 1 --config species_filter="robin"
 """
@@ -76,15 +73,4 @@ rule clean:
         rm -f output/*.csv
         rm -f logs/*.log
         echo "Cleaned checkpoints, outputs, and logs"
-        """
-
-# Clean all including MongoDB data (use with caution)
-rule clean_all:
-    shell:
-        """
-        rm -f checkpoints/*.flag
-        rm -f output/*.csv
-        rm -f logs/*.log
-        echo "⚠️  Warning: This does not clean MongoDB or MinIO data"
-        echo "To clean databases, use: docker-compose down -v"
         """

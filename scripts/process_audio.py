@@ -1,5 +1,3 @@
-"""Script to process audio files, upload to MinIO, and classify birds."""
-
 import sys
 import json
 import requests

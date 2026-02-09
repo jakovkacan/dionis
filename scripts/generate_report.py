@@ -1,5 +1,3 @@
-"""Script to generate statistics report from collected data."""
-
 import sys
 from pathlib import Path
 from typing import Optional
@@ -45,16 +43,26 @@ def fetch_data_from_mongodb(db, species_filter: Optional[str] = None,
         print("No species data found")
         return pd.DataFrame()
 
+    # Normalize column names - MongoDB stores with aliases
+    # scientificName -> scientific_name, canonicalName -> canonical_name
+    column_mapping = {
+        'scientificName': 'scientific_name',
+        'canonicalName': 'canonical_name'
+    }
+    species_df.rename(columns=column_mapping, inplace=True)
+
     # Apply fuzzy filter if provided
     if species_filter:
         print(f"Applying fuzzy filter: '{species_filter}'")
-        species_names = species_df['scientific_name'].tolist()
+        # Check which name column exists
+        name_column = 'scientific_name' if 'scientific_name' in species_df.columns else 'scientificName'
+        species_names = species_df[name_column].tolist()
         filtered_names = DataCleaner.filter_species_fuzzy(
             species_names,
             species_filter,
             threshold=70
         )
-        species_df = species_df[species_df['scientific_name'].isin(filtered_names)]
+        species_df = species_df[species_df[name_column].isin(filtered_names)]
         print(f"Filtered to {len(species_df)} species")
 
     # Fetch classifications with minimum confidence
@@ -77,19 +85,30 @@ def fetch_data_from_mongodb(db, species_filter: Optional[str] = None,
     observation_docs = list(observations_coll.find())
     observations_df = pd.DataFrame(observation_docs) if observation_docs else pd.DataFrame()
 
-    # Merge data
+    # Merge data - select only columns that exist
+    merge_columns = ['key']
+    optional_columns = ['scientific_name', 'canonical_name', 'family', 'order']
+    for col in optional_columns:
+        if col in species_df.columns:
+            merge_columns.append(col)
+
     result_df = classifications_df.merge(
-        species_df[['key', 'scientific_name', 'canonical_name', 'family', 'order']],
+        species_df[merge_columns],
         on='key',
         how='left',
         suffixes=('_class', '_species')
     )
 
     # Use scientific name from species collection if available
-    result_df['scientific_name'] = result_df['scientific_name_species'].fillna(
-        result_df['scientific_name_class']
-    )
-    result_df = result_df.drop(columns=['scientific_name_class', 'scientific_name_species'])
+    if 'scientific_name_species' in result_df.columns and 'scientific_name_class' in result_df.columns:
+        result_df['scientific_name'] = result_df['scientific_name_species'].fillna(
+            result_df['scientific_name_class']
+        )
+        result_df = result_df.drop(columns=['scientific_name_class', 'scientific_name_species'])
+    elif 'scientific_name_species' in result_df.columns:
+        result_df = result_df.rename(columns={'scientific_name_species': 'scientific_name'})
+    elif 'scientific_name_class' in result_df.columns:
+        result_df = result_df.rename(columns={'scientific_name_class': 'scientific_name'})
 
     # Add observation data if available
     if not observations_df.empty:

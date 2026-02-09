@@ -1,5 +1,3 @@
-"""Script to scrape bird species data and store in MongoDB."""
-
 import sys
 import yaml
 from pathlib import Path

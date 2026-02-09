@@ -1,5 +1,3 @@
-"""MinIO storage configuration and connection management."""
-
 import os
 from minio import Minio
 from minio.error import S3Error

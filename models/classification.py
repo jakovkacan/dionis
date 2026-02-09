@@ -1,5 +1,3 @@
-"""Classification data model."""
-
 from datetime import datetime
 from typing import Dict, Any, Optional, List
 from bson import ObjectId

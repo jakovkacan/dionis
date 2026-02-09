@@ -1,5 +1,3 @@
-"""MongoDB database configuration and connection management."""
-
 import os
 from typing import Optional
 from pymongo import MongoClient

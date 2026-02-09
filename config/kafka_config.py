@@ -1,5 +1,3 @@
-"""Kafka configuration and connection management."""
-
 import os
 from kafka import KafkaConsumer, KafkaProducer
 import json

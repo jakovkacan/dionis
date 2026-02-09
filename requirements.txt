@@ -10,6 +10,9 @@ lxml==6.0.2
 selenium==4.27.1  # For JavaScript-rendered content
 webdriver-manager==4.0.2  # Automatic ChromeDriver version management
 
+# Mock API server
+flask==3.0.0
+
 # Data processing
 pandas==3.0.0
 numpy==2.4.2

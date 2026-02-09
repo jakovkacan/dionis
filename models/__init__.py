@@ -1,5 +1,3 @@
-"""Data models for Dionis pipeline."""
-
 from .species import Species
 from .observation import Observation
 from .classification import Classification
