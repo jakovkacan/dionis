@@ -2,6 +2,9 @@ import sys
 import json
 import requests
 import hashlib
+import subprocess
+import tempfile
+import shutil
 from pathlib import Path
 from datetime import datetime
 from typing import List, Dict, Any, Optional
@@ -90,8 +93,74 @@ def upload_audio_to_minio(minio_client, file_path: Path,
     return minio_path
 
 
+def compress_audio_if_needed(file_path: Path, max_size_mb: float = 1.0) -> Path:
+    """
+    Compress audio file if it exceeds size limit.
+
+    Args:
+        file_path: Path to original audio file
+        max_size_mb: Maximum file size in MB
+
+    Returns:
+        Path to compressed file (or original if no compression needed)
+    """
+    file_size_mb = file_path.stat().st_size / (1024 * 1024)
+
+    if file_size_mb <= max_size_mb:
+        return file_path
+
+    print(f"  File size ({file_size_mb:.2f} MB) exceeds limit ({max_size_mb} MB)")
+    print(f"  Compressing audio...")
+
+    # Check if ffmpeg is available
+    try:
+        subprocess.run(['ffmpeg', '-version'],
+                      capture_output=True,
+                      check=True)
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        print("  Warning: ffmpeg not found. Install it to enable compression.")
+        print("  Warning: Continuing with original file (may fail)...")
+        return file_path
+
+    # Create temporary compressed file
+    temp_dir = Path(tempfile.gettempdir()) / 'dionis_compressed'
+    temp_dir.mkdir(exist_ok=True)
+
+    compressed_path = temp_dir / f"compressed_{file_path.name}"
+
+    try:
+        # Compress with lower bitrate and sample rate
+        # Use adaptive bitrate based on file size
+        if file_size_mb > 2.5:
+            target_bitrate = '32k'  # Very aggressive for huge files
+        elif file_size_mb > 1.5:
+            target_bitrate = '48k'  # Aggressive for large files
+        else:
+            target_bitrate = '64k'  # Standard compression
+
+        subprocess.run([
+            'ffmpeg',
+            '-i', str(file_path),
+            '-b:a', target_bitrate,
+            '-ar', '22050',  # Lower sample rate
+            '-ac', '1',       # Mono
+            '-y',             # Overwrite output file
+            str(compressed_path)
+        ], capture_output=True, check=True, text=True)
+
+        new_size_mb = compressed_path.stat().st_size / (1024 * 1024)
+        print(f"  Compressed: {file_size_mb:.2f} MB -> {new_size_mb:.2f} MB")
+
+        return compressed_path
+
+    except subprocess.CalledProcessError as e:
+        print(f"  Warning: Compression failed: {e}")
+        print(f"  Warning: Continuing with original file...")
+        return file_path
+
+
 def classify_audio(api_endpoint: str, file_path: Path,
-                   timeout: int = 60) -> Optional[Dict[str, Any]]:
+                   timeout: int = 60, max_size_mb: float = 1.0) -> Optional[Dict[str, Any]]:
     """
     Call classification API for audio file.
 
@@ -99,14 +168,20 @@ def classify_audio(api_endpoint: str, file_path: Path,
         api_endpoint: API endpoint URL
         file_path: Path to audio file
         timeout: Request timeout
+        max_size_mb: Maximum file size in MB (default 1.0)
 
     Returns:
         Classification response or None
     """
+    compressed_file = None
     try:
+        # Compress if needed
+        file_to_send = compress_audio_if_needed(file_path, max_size_mb)
+        compressed_file = file_to_send if file_to_send != file_path else None
+
         # Prepare file for upload
-        with open(file_path, 'rb') as f:
-            files = {'audio': (file_path.name, f, 'audio/mpeg')}
+        with open(file_to_send, 'rb') as f:
+            files = {'file': (file_path.name, f, 'audio/mpeg')}
 
             # Make API request
             response = requests.post(
@@ -124,6 +199,13 @@ def classify_audio(api_endpoint: str, file_path: Path,
     except Exception as e:
         print(f"Error classifying audio: {e}")
         return None
+    finally:
+        # Cleanup temporary compressed file
+        if compressed_file and compressed_file.exists():
+            try:
+                compressed_file.unlink()
+            except Exception:
+                pass
 
 
 def store_api_log(minio_client, bucket_name: str,
@@ -303,8 +385,8 @@ def process_audio_files():
 
             print(f"  API log stored: {log_path}")
 
-            # Parse classification results
-            detected_birds = api_response.get('detections', [])
+            # Parse classification results - support both API formats
+            detected_birds = api_response.get('results', api_response.get('detections', []))
 
             if not detected_birds:
                 print("  ℹ No birds detected")
@@ -320,9 +402,17 @@ def process_audio_files():
                 confidence = float(detection.get('confidence', 0.0))
                 scientific_name = detection.get('scientific_name') or detection.get('scientificName') or detection.get('species_name', 'Unknown')
 
-                # Look up species in database by key
-                species = species_collection.find_one({'key': key})
+                # Look up species in database by scientific name if no key
+                species = None
+                if key:
+                    species = species_collection.find_one({'key': key})
+                else:
+                    # Try to find by scientific name
+                    species = species_collection.find_one({'scientific_name': scientific_name})
+
                 if species:
+                    # Use key from database if found
+                    key = species.get('key', key)
                     scientific_name = species.get('scientific_name') or species.get('scientificName', scientific_name)
 
                 # Create classification record

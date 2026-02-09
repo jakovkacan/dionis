@@ -4,7 +4,7 @@ audio:
     longitude: 15.9819
   source_directory: ./audio_files
 classifier_api:
-  endpoint: http://localhost:8080/analyze
+  endpoint: https://aves.regoch.net/api/classify
   timeout: 60
 kafka:
   auto_offset_reset: earliest
