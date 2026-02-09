@@ -1,0 +1,53 @@
+# Configuration file for Dionis pipeline
+
+# MongoDB settings
+mongodb:
+  host: localhost
+  port: 27017
+  database: dionis
+  collections:
+    species: bird_species
+    observations: bird_observations
+    classifications: bird_classifications
+    audio_files: audio_files
+
+# MinIO settings
+minio:
+  endpoint: localhost:9000
+  access_key: minioadmin
+  secret_key: minioadmin
+  secure: false
+  buckets:
+    audio: bird-audio
+    logs: api-logs
+
+# Kafka settings
+kafka:
+  bootstrap_servers: localhost:9092
+  topic: bird-observations
+  group_id: dionis-consumer
+  auto_offset_reset: earliest
+
+# Scraping settings
+scraping:
+  url: https://aves.regoch.net
+  timeout: 30
+  retry_attempts: 3
+
+# API settings
+classifier_api:
+  endpoint: https://api.example.com/classify  # Replace with actual endpoint
+  timeout: 60
+
+# Audio processing
+audio:
+  source_directory: ./audio_files
+  default_location:
+    latitude: 45.8150
+    longitude: 15.9819  # Zagreb coordinates
+
+# Report settings
+report:
+  output_file: output/bird_report.csv
+  min_confidence: 0.5
+  species_filter: null  # Set to filter species names
