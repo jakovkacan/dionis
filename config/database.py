@@ -93,19 +93,19 @@ def create_indexes(db: Database):
 
     # Species collection indexes
     species_coll = db[collections['species']]
-    species_coll.create_index('taxonomy_id', unique=True)
-    species_coll.create_index('species_name')
+    species_coll.create_index('key', unique=True)
+    species_coll.create_index('scientificName')
 
     # Observations collection indexes
     obs_coll = db[collections['observations']]
-    obs_coll.create_index('taxonomy_id')
+    obs_coll.create_index('key')
     obs_coll.create_index([('location.latitude', 1), ('location.longitude', 1)])
     obs_coll.create_index('timestamp')
 
     # Classifications collection indexes
     class_coll = db[collections['classifications']]
     class_coll.create_index('audio_file_id')
-    class_coll.create_index('taxonomy_id')
+    class_coll.create_index('key')
     class_coll.create_index('confidence')
 
     # Audio files collection indexes

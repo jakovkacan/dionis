@@ -39,7 +39,7 @@ class DataCleaner:
             ]
 
         # Remove duplicates
-        df = df.drop_duplicates(subset=['taxonomy_id', 'latitude', 'longitude', 'timestamp'])
+        df = df.drop_duplicates(subset=['key', 'latitude', 'longitude', 'timestamp'])
 
         # Convert timestamps
         if 'timestamp' in df.columns:
@@ -70,7 +70,7 @@ class DataCleaner:
 
         # Remove duplicates (keep highest confidence)
         df = df.sort_values('confidence', ascending=False)
-        df = df.drop_duplicates(subset=['audio_file_id', 'taxonomy_id'], keep='first')
+        df = df.drop_duplicates(subset=['audio_file_id', 'key'], keep='first')
 
         return df
 

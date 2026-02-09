@@ -22,13 +22,16 @@ def parse_observation_message(message: Dict[str, Any]) -> Observation:
     Returns:
         Observation object
     """
-    # Extract required fields
-    taxonomy_id = message.get('taxonomy_id') or message.get('species_id', '')
+    # Extract required fields - support both 'key' and legacy field names
+    key = message.get('key') or message.get('taxonomy_id') or message.get('species_id', 0)
+    if isinstance(key, str):
+        key = int(key) if key.isdigit() else 0
+
     latitude = float(message.get('latitude', 0.0))
     longitude = float(message.get('longitude', 0.0))
 
     # Extract biological data (all other fields)
-    exclude_keys = {'taxonomy_id', 'species_id', 'latitude', 'longitude', 'timestamp'}
+    exclude_keys = {'key', 'taxonomy_id', 'species_id', 'latitude', 'longitude', 'timestamp'}
     biological_data = {
         key: value for key, value in message.items()
         if key not in exclude_keys
@@ -36,7 +39,7 @@ def parse_observation_message(message: Dict[str, Any]) -> Observation:
 
     # Create observation
     observation = Observation(
-        taxonomy_id=taxonomy_id,
+        key=key,
         latitude=latitude,
         longitude=longitude,
         timestamp=message.get('timestamp'),
@@ -81,7 +84,7 @@ def consume_and_store_observations():
                 if result.inserted_id:
                     stored_count += 1
                     print(f"Stored observation {stored_count}: "
-                          f"Species {observation.taxonomy_id} at "
+                          f"Species {observation.key} at "
                           f"({observation.latitude:.4f}, {observation.longitude:.4f})")
 
             except Exception as e:

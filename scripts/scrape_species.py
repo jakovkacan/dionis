@@ -38,22 +38,18 @@ def scrape_and_store_species():
     if existing_count > 0:
         print(f"Species data already exists ({existing_count} records)")
         print("Skipping scraping step...")
+        Path('checkpoints').mkdir(exist_ok=True)
+        Path('checkpoints/species_scraped.flag').touch()
+        print("Checkpoint created: species_scraped.flag")
         return
 
     # Initialize scraper
     scraping_config = config['scraping']
-    use_selenium = scraping_config.get('use_selenium', True)
-
-    # Allow command line override
-    if len(sys.argv) > 1 and sys.argv[1] == '--selenium':
-        use_selenium = True
-        print("Using Selenium for JavaScript-rendered content")
 
     scraper = BirdSpeciesScraper(
         base_url=scraping_config['url'],
         timeout=scraping_config['timeout'],
         retry_attempts=scraping_config['retry_attempts'],
-        use_selenium=use_selenium
     )
 
     print(f"Starting scraping from: {scraping_config['url']}")

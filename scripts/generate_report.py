@@ -48,13 +48,13 @@ def fetch_data_from_mongodb(db, species_filter: Optional[str] = None,
     # Apply fuzzy filter if provided
     if species_filter:
         print(f"Applying fuzzy filter: '{species_filter}'")
-        species_names = species_df['species_name'].tolist()
+        species_names = species_df['scientific_name'].tolist()
         filtered_names = DataCleaner.filter_species_fuzzy(
             species_names,
             species_filter,
             threshold=70
         )
-        species_df = species_df[species_df['species_name'].isin(filtered_names)]
+        species_df = species_df[species_df['scientific_name'].isin(filtered_names)]
         print(f"Filtered to {len(species_df)} species")
 
     # Fetch classifications with minimum confidence
@@ -79,30 +79,30 @@ def fetch_data_from_mongodb(db, species_filter: Optional[str] = None,
 
     # Merge data
     result_df = classifications_df.merge(
-        species_df[['taxonomy_id', 'species_name', 'common_name', 'family', 'order']],
-        on='taxonomy_id',
+        species_df[['key', 'scientific_name', 'canonical_name', 'family', 'order']],
+        on='key',
         how='left',
         suffixes=('_class', '_species')
     )
 
-    # Use species name from species collection if available
-    result_df['species_name'] = result_df['species_name_species'].fillna(
-        result_df['species_name_class']
+    # Use scientific name from species collection if available
+    result_df['scientific_name'] = result_df['scientific_name_species'].fillna(
+        result_df['scientific_name_class']
     )
-    result_df = result_df.drop(columns=['species_name_class', 'species_name_species'])
+    result_df = result_df.drop(columns=['scientific_name_class', 'scientific_name_species'])
 
     # Add observation data if available
     if not observations_df.empty:
-        # Group observations by taxonomy_id
-        obs_grouped = observations_df.groupby('taxonomy_id').agg({
+        # Group observations by key
+        obs_grouped = observations_df.groupby('key').agg({
             '_id': 'count',
             'biological_data': lambda x: x.tolist()
         }).reset_index()
-        obs_grouped.columns = ['taxonomy_id', 'observation_count', 'biological_data_list']
+        obs_grouped.columns = ['key', 'observation_count', 'biological_data_list']
 
         result_df = result_df.merge(
             obs_grouped,
-            on='taxonomy_id',
+            on='key',
             how='left'
         )
 
@@ -132,12 +132,12 @@ def aggregate_statistics(df: pd.DataFrame) -> pd.DataFrame:
     if 'observation_count' in df.columns:
         agg_dict['observation_count'] = 'sum'
 
-    stats_df = df.groupby(['taxonomy_id', 'species_name']).agg(agg_dict).reset_index()
+    stats_df = df.groupby(['key', 'scientific_name']).agg(agg_dict).reset_index()
 
     # Flatten column names
     stats_df.columns = [
-        'taxonomy_id',
-        'species_name',
+        'key',
+        'scientific_name',
         'avg_confidence',
         'max_confidence',
         'min_confidence',
@@ -145,8 +145,8 @@ def aggregate_statistics(df: pd.DataFrame) -> pd.DataFrame:
         'unique_audio_files',
         'total_observations'
     ] if 'observation_count' in df.columns else [
-        'taxonomy_id',
-        'species_name',
+        'key',
+        'scientific_name',
         'avg_confidence',
         'max_confidence',
         'min_confidence',
@@ -159,7 +159,7 @@ def aggregate_statistics(df: pd.DataFrame) -> pd.DataFrame:
         bio_data_summary = extract_biological_summary(df)
         stats_df = stats_df.merge(
             bio_data_summary,
-            on='taxonomy_id',
+            on='key',
             how='left'
         )
 
@@ -181,7 +181,7 @@ def extract_biological_summary(df: pd.DataFrame) -> pd.DataFrame:
     """
     bio_summaries = []
 
-    for taxonomy_id, group in df.groupby('taxonomy_id'):
+    for key, group in df.groupby('key'):
         bio_data_list = []
 
         for bio_list in group['biological_data_list'].dropna():
@@ -197,12 +197,12 @@ def extract_biological_summary(df: pd.DataFrame) -> pd.DataFrame:
             if isinstance(bio_data, dict):
                 all_keys.update(bio_data.keys())
 
-        summary = {'taxonomy_id': taxonomy_id}
+        summary = {'key': key}
 
-        for key in all_keys:
+        for key_name in all_keys:
             values = [
-                bio_data.get(key) for bio_data in bio_data_list
-                if isinstance(bio_data, dict) and key in bio_data
+                bio_data.get(key_name) for bio_data in bio_data_list
+                if isinstance(bio_data, dict) and key_name in bio_data
             ]
 
             if values:
@@ -210,11 +210,11 @@ def extract_biological_summary(df: pd.DataFrame) -> pd.DataFrame:
                 try:
                     numeric_values = [float(v) for v in values if v is not None]
                     if numeric_values:
-                        summary[f'avg_{key}'] = sum(numeric_values) / len(numeric_values)
+                        summary[f'avg_{key_name}'] = sum(numeric_values) / len(numeric_values)
                 except (ValueError, TypeError):
                     # For non-numeric, count occurrences
                     most_common = max(set(values), key=values.count)
-                    summary[f'most_common_{key}'] = most_common
+                    summary[f'most_common_{key_name}'] = most_common
 
         bio_summaries.append(summary)
 
@@ -282,7 +282,7 @@ def generate_report():
         print(f"Total observations: {stats_df['total_observations'].sum():.0f}")
 
     print("\nTop 10 species by classification count:")
-    print(stats_df[['species_name', 'classification_count', 'avg_confidence']].head(10).to_string(index=False))
+    print(stats_df[['scientific_name', 'classification_count', 'avg_confidence']].head(10).to_string(index=False))
 
     print("\nPipeline completed successfully!")
 

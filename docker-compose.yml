@@ -56,18 +56,6 @@ services:
       - kafka_data:/var/lib/kafka/data
     networks:
       - dionis-network
-  birdnet-go:
-    image: tphakala/birdnet-go:latest
-    container_name: dionis-birdnet-go
-    ports:
-      - "8080:8080"
-    volumes:
-      - birdnet_config:/config
-      - birdnet_data:/data
-    environment:
-      - TZ=Europe/Zagreb
-    networks:
-      - dionis-network
 
 volumes:
   mongodb_data:

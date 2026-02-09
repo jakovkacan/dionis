@@ -8,7 +8,7 @@ class Observation:
     """Represents a bird observation from Kafka."""
 
     def __init__(self,
-                 taxonomy_id: str,
+                 key: int,
                  latitude: float,
                  longitude: float,
                  timestamp: Optional[datetime] = None,
@@ -18,14 +18,14 @@ class Observation:
         Initialize an Observation instance.
 
         Args:
-            taxonomy_id: Species taxonomy identifier
+            key: GBIF species key (unique identifier)
             latitude: Observation latitude
             longitude: Observation longitude
             timestamp: Time of observation
             biological_data: Variable biological properties
             source: Source of the observation
         """
-        self.taxonomy_id = taxonomy_id
+        self.key = key
         self.latitude = latitude
         self.longitude = longitude
         self.timestamp = timestamp or datetime.utcnow()
@@ -36,7 +36,7 @@ class Observation:
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for MongoDB storage."""
         return {
-            'taxonomy_id': self.taxonomy_id,
+            'key': self.key,
             'location': {
                 'latitude': self.latitude,
                 'longitude': self.longitude
@@ -52,7 +52,7 @@ class Observation:
         """Create Observation instance from dictionary."""
         location = data.get('location', {})
         return cls(
-            taxonomy_id=data['taxonomy_id'],
+            key=data['key'],
             latitude=location.get('latitude', 0.0),
             longitude=location.get('longitude', 0.0),
             timestamp=data.get('timestamp'),

@@ -314,21 +314,25 @@ def process_audio_files():
 
             # Store classifications
             for detection in detected_birds:
-                taxonomy_id = detection.get('taxonomy_id', detection.get('species_id', ''))
-                confidence = float(detection.get('confidence', 0.0))
-                species_name = detection.get('species_name', 'Unknown')
+                # Support both 'key' and legacy field names
+                key = detection.get('key') or detection.get('taxonomy_id') or detection.get('species_id', 0)
+                if isinstance(key, str):
+                    key = int(key) if key.isdigit() else 0
 
-                # Look up species in database
-                species = species_collection.find_one({'taxonomy_id': taxonomy_id})
+                confidence = float(detection.get('confidence', 0.0))
+                scientific_name = detection.get('scientific_name') or detection.get('scientificName') or detection.get('species_name', 'Unknown')
+
+                # Look up species in database by key
+                species = species_collection.find_one({'key': key})
                 if species:
-                    species_name = species.get('species_name', species_name)
+                    scientific_name = species.get('scientific_name') or species.get('scientificName', scientific_name)
 
                 # Create classification record
                 classification = Classification(
                     audio_file_id=audio_file_id,
-                    taxonomy_id=taxonomy_id,
+                    key=key,
                     confidence=confidence,
-                    species_name=species_name,
+                    scientific_name=scientific_name,
                     detected_birds=detected_birds,
                     api_response=api_response,
                     log_path=log_path
@@ -337,7 +341,7 @@ def process_audio_files():
                 classification_collection.insert_one(classification.to_dict())
                 classified_count += 1
 
-                print(f"  Classified: {species_name} (confidence: {confidence:.2%})")
+                print(f"  Classified: {scientific_name} (confidence: {confidence:.2%})")
 
         except Exception as e:
             print(f"  Error processing file: {e}")
