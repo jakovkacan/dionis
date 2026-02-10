@@ -7,7 +7,7 @@
 configfile: "config.yaml"
 
 # Get optional filter from config
-SPECIES_FILTER = config.get("species_filter", "")
+SPECIES_FILTER = config.get("species_filter","")
 
 # All rule - defines the final output
 rule all:
@@ -25,8 +25,21 @@ rule scrape_species:
         python scripts/scrape_species.py > {log} 2>&1
         """
 
+# Step 1b: Produce observations to Kafka
+rule produce_kafka:
+    output:
+        flag="checkpoints/kafka_produced.flag"
+    log:
+        "logs/produce_kafka.log"
+    shell:
+        """
+        python scripts/produce_kafka.py > {log} 2>&1
+        """
+
 # Step 2: Consume Kafka messages
 rule consume_kafka:
+    input:
+        produce_flag="checkpoints/kafka_produced.flag"
     output:
         flag="checkpoints/kafka_consumed.flag"
     log:

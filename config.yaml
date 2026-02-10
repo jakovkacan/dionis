@@ -31,7 +31,7 @@ mongodb:
 report:
   min_confidence: 0.5
   output_file: output/bird_report.csv
-  species_filter: Rhipidura
+#  species_filter: Rhipidura
 scraping:
   retry_attempts: 3
   timeout: 30

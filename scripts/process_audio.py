@@ -50,10 +50,39 @@ def get_audio_files(directory: str) -> List[Path]:
     return audio_files
 
 
-def upload_audio_to_minio(minio_client, file_path: Path,
-                          bucket_name: str) -> str:
+def check_file_exists_in_minio(minio_client, bucket_name: str,
+                                file_hash: str, file_name: str) -> Optional[str]:
     """
-    Upload audio file to MinIO.
+    Check if a file with the same hash and name already exists in MinIO.
+
+    Args:
+        minio_client: MinIO client
+        bucket_name: Target bucket name
+        file_hash: MD5 hash of the file
+        file_name: Original file name
+
+    Returns:
+        Object path if file exists, None otherwise
+    """
+    try:
+        # List all objects in the audio/ prefix
+        objects = minio_client.list_objects(bucket_name, prefix='audio/', recursive=True)
+
+        for obj in objects:
+            # Check if object name contains both the hash and filename
+            if file_hash in obj.object_name and file_name in obj.object_name:
+                return f"{bucket_name}/{obj.object_name}"
+
+        return None
+    except Exception as e:
+        print(f"  Warning: Error checking existing files: {e}")
+        return None
+
+
+def upload_audio_to_minio(minio_client, file_path: Path,
+                          bucket_name: str) -> tuple[str, bool]:
+    """
+    Upload audio file to MinIO if it doesn't already exist.
 
     Args:
         minio_client: MinIO client
@@ -61,11 +90,18 @@ def upload_audio_to_minio(minio_client, file_path: Path,
         bucket_name: Target bucket name
 
     Returns:
-        Object path in MinIO
+        Tuple of (object path in MinIO, was_uploaded boolean)
     """
     # Generate unique object name using hash
     with open(file_path, 'rb') as f:
         file_hash = hashlib.md5(f.read()).hexdigest()
+
+    # Check if file already exists
+    existing_path = check_file_exists_in_minio(minio_client, bucket_name,
+                                                file_hash, file_path.name)
+    if existing_path:
+        print(f"  File already exists in MinIO (hash: {file_hash[:8]}...)")
+        return existing_path, False
 
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     object_name = f"audio/{timestamp}_{file_hash}_{file_path.name}"
@@ -90,7 +126,7 @@ def upload_audio_to_minio(minio_client, file_path: Path,
         content_type=content_type
     )
 
-    return minio_path
+    return minio_path, True
 
 
 def compress_audio_if_needed(file_path: Path, max_size_mb: float = 1.0) -> Path:
@@ -323,6 +359,7 @@ def process_audio_files():
     print(f"Found {len(audio_files)} audio files")
 
     uploaded_count = 0
+    skipped_count = 0
     classified_count = 0
 
     for idx, file_path in enumerate(audio_files, 1):
@@ -338,11 +375,18 @@ def process_audio_files():
 
             # Upload to MinIO
             print("  Uploading to MinIO...")
-            minio_path = upload_audio_to_minio(
+            minio_path, was_uploaded = upload_audio_to_minio(
                 minio_client,
                 file_path,
                 audio_bucket
             )
+
+            if was_uploaded:
+                uploaded_count += 1
+                print(f"  Uploaded to: {minio_path}")
+            else:
+                skipped_count += 1
+                print(f"  Skipped (already exists): {minio_path}")
 
             # Create AudioFile record
             audio_file = AudioFile(
@@ -357,9 +401,7 @@ def process_audio_files():
             # Store in MongoDB
             result = audio_collection.insert_one(audio_file.to_dict())
             audio_file_id = str(result.inserted_id)
-            uploaded_count += 1
 
-            print(f"  Uploaded to: {minio_path}")
             print(f"  Location: ({latitude:.4f}, {longitude:.4f})")
 
             # Classify audio
@@ -437,6 +479,7 @@ def process_audio_files():
 
     print("\n" + "=" * 60)
     print(f"Uploaded {uploaded_count} audio files")
+    print(f"Skipped {skipped_count} audio files (already in MinIO)")
     print(f"Created {classified_count} classification records")
 
     # Create checkpoint file

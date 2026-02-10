@@ -92,12 +92,43 @@ def fetch_data_from_mongodb(db, species_filter: Optional[str] = None,
         if col in species_df.columns:
             merge_columns.append(col)
 
+    # First merge by key
     result_df = classifications_df.merge(
         species_df[merge_columns],
         on='key',
         how='left',
         suffixes=('_class', '_species')
     )
+
+    # For rows where key=0 or species info is missing, try to match by scientific name
+    if 'scientific_name_class' in result_df.columns:
+        # Get rows where species merge didn't work (no species data found)
+        missing_species_mask = result_df['scientific_name_species'].isna() if 'scientific_name_species' in result_df.columns else pd.Series([True] * len(result_df))
+
+        if missing_species_mask.any():
+            print(f"  Attempting to match {missing_species_mask.sum()} records by scientific name...")
+
+            # Try to merge by scientific name for these rows
+            for idx in result_df[missing_species_mask].index:
+                sci_name = result_df.loc[idx, 'scientific_name_class']
+
+                # Normalize scientific name for matching
+                if sci_name and sci_name != 'Unknown':
+                    # Look for matching species by scientific name
+                    species_match = species_df[
+                        (species_df['scientific_name'] == sci_name) |
+                        (species_df.get('canonical_name', '') == sci_name)
+                    ]
+
+                    if not species_match.empty:
+                        # Use the first match
+                        matched_species = species_match.iloc[0]
+                        print(f"    Matched '{sci_name}' to species key {matched_species['key']}")
+
+                        # Update the row with matched species data
+                        for col in merge_columns:
+                            if col in matched_species.index:
+                                result_df.loc[idx, f'{col}_species'] = matched_species[col]
 
     # Use scientific name from species collection if available
     if 'scientific_name_species' in result_df.columns and 'scientific_name_class' in result_df.columns:
@@ -112,18 +143,79 @@ def fetch_data_from_mongodb(db, species_filter: Optional[str] = None,
 
     # Add observation data if available
     if not observations_df.empty:
-        # Group observations by key
-        obs_grouped = observations_df.groupby('key').agg({
+        print(f"  Processing {len(observations_df)} observation records...")
+
+        # Enrich observations with scientific names from species collection
+        # Observations only have 'key', not 'scientific_name', so we need to look it up
+        if 'key' in observations_df.columns and 'key' in species_df.columns:
+            # Create a mapping from key to scientific_name
+            key_to_name = species_df.set_index('key')['scientific_name'].to_dict()
+
+            # Add scientific_name to observations based on their key
+            observations_df['scientific_name'] = observations_df['key'].map(key_to_name)
+
+            enriched_count = observations_df['scientific_name'].notna().sum()
+            print(f"    Enriched {enriched_count}/{len(observations_df)} observations with scientific names")
+
+        # Group observations by key first
+        obs_by_key = observations_df[observations_df['key'] > 0].groupby('key').agg({
             '_id': 'count',
             'biological_data': lambda x: x.tolist()
         }).reset_index()
-        obs_grouped.columns = ['key', 'observation_count', 'biological_data_list']
+        obs_by_key.columns = ['key', 'observation_count', 'biological_data_list']
 
+        # Merge by key
         result_df = result_df.merge(
-            obs_grouped,
+            obs_by_key,
             on='key',
             how='left'
         )
+
+        # Also try matching by scientific name for observations that were enriched
+        if 'scientific_name' in observations_df.columns and 'scientific_name' in result_df.columns:
+            # Filter observations that have scientific names
+            obs_with_names = observations_df[observations_df['scientific_name'].notna()]
+
+            if not obs_with_names.empty:
+                obs_by_name = obs_with_names.groupby('scientific_name').agg({
+                    '_id': 'count',
+                    'biological_data': lambda x: x.tolist()
+                }).reset_index()
+                obs_by_name.columns = ['scientific_name', 'observation_count_by_name', 'biological_data_by_name']
+
+                # Merge by scientific name
+                result_df = result_df.merge(
+                    obs_by_name,
+                    on='scientific_name',
+                    how='left'
+                )
+
+                # Combine counts - add by_name data to by_key data (avoiding double counting)
+                if 'observation_count' in result_df.columns and 'observation_count_by_name' in result_df.columns:
+                    # For rows where key matched, we already have the data, so only use name match where key didn't match
+                    result_df['observation_count'] = result_df.apply(
+                        lambda row: row['observation_count'] if pd.notna(row['observation_count'])
+                        else row['observation_count_by_name'],
+                        axis=1
+                    )
+
+                    # Combine biological data lists similarly
+                    def combine_bio_data(row):
+                        data1 = row.get('biological_data_list', []) or []
+                        data2 = row.get('biological_data_by_name', []) or []
+
+                        # If we have data from key match, use that; otherwise use name match
+                        if data1:
+                            return data1
+                        elif data2:
+                            return data2
+                        return None
+
+                    result_df['biological_data_list'] = result_df.apply(combine_bio_data, axis=1)
+                    result_df = result_df.drop(columns=['observation_count_by_name', 'biological_data_by_name'])
+
+        matched_obs = result_df['observation_count'].notna().sum()
+        print(f"  Matched observations to {matched_obs} classification records")
 
     return result_df
 
@@ -176,11 +268,13 @@ def aggregate_statistics(df: pd.DataFrame) -> pd.DataFrame:
     # Add biological data summary if available
     if 'biological_data_list' in df.columns:
         bio_data_summary = extract_biological_summary(df)
-        stats_df = stats_df.merge(
-            bio_data_summary,
-            on='key',
-            how='left'
-        )
+        # Only merge if bio_data_summary is not empty and has 'key' column
+        if not bio_data_summary.empty and 'key' in bio_data_summary.columns:
+            stats_df = stats_df.merge(
+                bio_data_summary,
+                on='key',
+                how='left'
+            )
 
     # Sort by classification count
     stats_df = stats_df.sort_values('classification_count', ascending=False)
@@ -200,7 +294,7 @@ def extract_biological_summary(df: pd.DataFrame) -> pd.DataFrame:
     """
     bio_summaries = []
 
-    for key, group in df.groupby('key'):
+    for species_key, group in df.groupby('key'):
         bio_data_list = []
 
         for bio_list in group['biological_data_list'].dropna():
@@ -211,17 +305,17 @@ def extract_biological_summary(df: pd.DataFrame) -> pd.DataFrame:
             continue
 
         # Aggregate biological properties
-        all_keys = set()
+        all_properties = set()
         for bio_data in bio_data_list:
             if isinstance(bio_data, dict):
-                all_keys.update(bio_data.keys())
+                all_properties.update(bio_data.keys())
 
-        summary = {'key': key}
+        summary = {'key': species_key}
 
-        for key_name in all_keys:
+        for prop_name in all_properties:
             values = [
-                bio_data.get(key_name) for bio_data in bio_data_list
-                if isinstance(bio_data, dict) and key_name in bio_data
+                bio_data.get(prop_name) for bio_data in bio_data_list
+                if isinstance(bio_data, dict) and prop_name in bio_data
             ]
 
             if values:
@@ -229,11 +323,11 @@ def extract_biological_summary(df: pd.DataFrame) -> pd.DataFrame:
                 try:
                     numeric_values = [float(v) for v in values if v is not None]
                     if numeric_values:
-                        summary[f'avg_{key_name}'] = sum(numeric_values) / len(numeric_values)
+                        summary[f'avg_{prop_name}'] = sum(numeric_values) / len(numeric_values)
                 except (ValueError, TypeError):
                     # For non-numeric, count occurrences
                     most_common = max(set(values), key=values.count)
-                    summary[f'most_common_{key_name}'] = most_common
+                    summary[f'most_common_{prop_name}'] = most_common
 
         bio_summaries.append(summary)
 
